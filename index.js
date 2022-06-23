@@ -22,6 +22,13 @@ app.post("/participants", async (req, res) => {
         // fazer as validações com JOI
         const NameAlreadyExist = await db.collection("users").find({ name }).toArray();
 
+        // invalid user
+        if (typeof(name) !== 'string' || name.length === 0 || name === null) {
+            res.sendStatus(422);
+            client.close();
+            return;
+        }
+
         // user conflit
         if (NameAlreadyExist.length > 0) {
             res.sendStatus(409);
@@ -65,6 +72,55 @@ app.get("/participants", async (req, res) => {
     res.send(participants)
 })
 
+app.post("/messages", async (req, res) => {
+    const {to, text, type} = req.body;
+    const {user} = req.headers;
+
+    // to and text validation
+    const isNotString = typeof(to) !== 'string' || typeof(text) !== 'string';
+    const isEmpty = to.length === 0 || to == null || text.length === 0 || text == null;
+
+    if (isNotString || isEmpty) {
+        res.sendStatus(422);
+        return;
+    }
+
+    // type validation
+    const errorInType = type !== 'message' && type !== 'private_message';
+    if (errorInType) {
+        res.sendStatus(422);
+        return;
+    }
+
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+
+        // tem que fazer a validação do "from" com o JOI
+        const participant = await db.collection("users").find({name: user}).toArray();
+        if (participant.length !== 1) {
+            console.log(`${user} is not a valid user`)
+            res.sendStatus(422);
+            client.close();
+            return;
+        }
+
+        await db.collection("messages").insertOne({
+            from: user,
+            to,
+            text,
+            type,
+            time: dayjs().format('HH:mm:ss')
+        })
+        client.close();
+    } catch (error) {
+        res.sendStatus(500);
+        client.close();
+    }
+
+    res.status(201).send("OK")
+})
 
 
 app.listen(5000, () => {
