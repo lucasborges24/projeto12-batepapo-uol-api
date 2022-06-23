@@ -50,6 +50,20 @@ app.post("/participants", async (req, res) => {
     res.status(201).send("OK")
 })
 
+app.get("/participants", async (req, res) => {
+    let participants;
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+        participants = await db.collection("users").find({}).toArray();
+        client.close();
+    } catch (error) {
+        res.sendStatus(500);
+        client.close();
+    }
+    res.send(participants)
+})
 
 
 
