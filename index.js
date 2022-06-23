@@ -23,7 +23,7 @@ app.post("/participants", async (req, res) => {
         const NameAlreadyExist = await db.collection("users").find({ name }).toArray();
 
         // invalid user
-        if (typeof(name) !== 'string' || name.length === 0 || name === null) {
+        if (typeof (name) !== 'string' || name.length === 0 || name === null) {
             res.sendStatus(422);
             client.close();
             return;
@@ -73,11 +73,11 @@ app.get("/participants", async (req, res) => {
 })
 
 app.post("/messages", async (req, res) => {
-    const {to, text, type} = req.body;
-    const {user} = req.headers;
+    const { to, text, type } = req.body;
+    const { user } = req.headers;
 
     // to and text validation
-    const isNotString = typeof(to) !== 'string' || typeof(text) !== 'string';
+    const isNotString = typeof (to) !== 'string' || typeof (text) !== 'string';
     const isEmpty = to.length === 0 || to == null || text.length === 0 || text == null;
 
     if (isNotString || isEmpty) {
@@ -98,7 +98,7 @@ app.post("/messages", async (req, res) => {
 
 
         // tem que fazer a validação do "from" com o JOI
-        const participant = await db.collection("users").find({name: user}).toArray();
+        const participant = await db.collection("users").find({ name: user }).toArray();
         if (participant.length !== 1) {
             console.log(`${user} is not a valid user`)
             res.sendStatus(422);
@@ -118,10 +118,36 @@ app.post("/messages", async (req, res) => {
         res.sendStatus(500);
         client.close();
     }
-
     res.status(201).send("OK")
 })
 
+app.get("/messages", async (req, res) => {
+    const limit = parseInt(req.query.limit);
+    const { user } = req.headers;
+    let messagesFiltered;
+
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+        messagesFiltered = await db.collection("messages").find({
+            $or:
+                [
+                    { to: { $in: ["Todos", user] } },
+                    { from: user }
+                ]
+        }).toArray();
+        if (limit !== undefined) {
+            messagesFiltered = messagesFiltered.slice(-limit)
+        }
+        client.close()
+    } catch (error) {
+        res.sendStatus(500);
+        client.close();
+        return;
+    }
+    res.send(messagesFiltered)
+})
 
 app.listen(5000, () => {
     console.log("servidor funfando")
