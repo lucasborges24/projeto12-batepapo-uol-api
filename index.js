@@ -4,6 +4,7 @@ import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs'
 import joi from 'joi';
+import Joi from 'joi';
 
 dotenv.config();
 const app = express();
@@ -20,11 +21,15 @@ app.post("/participants", async (req, res) => {
         await client.connect();
         const db = client.db("batePapoUol");
 
-        // fazer as validações com JOI
         const NameAlreadyExist = await db.collection("users").find({ name }).toArray();
 
+        const nameSchema = Joi.object({
+            name: Joi.string().required()
+        })
+        const validation = nameSchema.validate({name: name})
+
         // invalid user
-        if (typeof (name) !== 'string' || name.length === 0 || name === null) {
+        if (validation.error) {
             res.sendStatus(422);
             client.close();
             return;
