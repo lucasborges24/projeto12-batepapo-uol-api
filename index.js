@@ -26,7 +26,7 @@ app.post("/participants", async (req, res) => {
         const nameSchema = Joi.object({
             name: Joi.string().required()
         })
-        const validation = nameSchema.validate({name: name})
+        const validation = nameSchema.validate({ name: name })
 
         // invalid user
         if (validation.error) {
@@ -82,18 +82,19 @@ app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const { user } = req.headers;
 
-    // to and text validation
-    const isNotString = typeof (to) !== 'string' || typeof (text) !== 'string';
-    const isEmpty = to.length === 0 || to == null || text.length === 0 || text == null;
+    const messageSchema = Joi.object({
+        to: joi.string()
+            .required(),
+        text: joi.string()
+            .required(),
+        type: joi.string()
+            .valid("message")
+            .valid("private_message")
+            .required(),
+    })
+    const validation = messageSchema.validate({ to, text, type }, { abortEarly: true })
 
-    if (isNotString || isEmpty) {
-        res.sendStatus(422);
-        return;
-    }
-
-    // type validation
-    const errorInType = type !== 'message' && type !== 'private_message';
-    if (errorInType) {
+    if (validation.error) {
         res.sendStatus(422);
         return;
     }
