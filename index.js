@@ -156,6 +156,33 @@ app.get("/messages", async (req, res) => {
     res.send(messagesFiltered)
 })
 
+app.post("/status", async (req, res) => {
+    const { user } = req.headers
+    console.log(user)
+
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+        const participant = await db.collection("users").findOne({ name: user })
+        if(!participant) {
+            res.sendStatus(404);
+            return;
+        }
+        await db.collection("users").updateOne({
+            name: user,
+        }, {
+            $set: {lastStatus: Date.now()}
+        })
+        client.close();
+        res.sendStatus(200)
+    } catch (error) {
+        res.status(500).send("Internal Error")
+        client.close()
+        return;
+    }
+})
+
 app.listen(5000, () => {
     console.log("servidor funfando")
 })
