@@ -81,7 +81,7 @@ app.get("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const { user } = req.headers;
-
+    
     const messageSchema = Joi.object({
         to: joi.string()
             .required(),
@@ -105,8 +105,8 @@ app.post("/messages", async (req, res) => {
 
 
         // tem que fazer a validação do "from" com o JOI
-        const participant = await db.collection("users").find({ name: user }).toArray();
-        if (participant.length !== 1) {
+        const participant = await db.collection("users").findOne({ name: user })
+        if (!participant) {
             console.log(`${user} is not a valid user`)
             res.sendStatus(422);
             client.close();
@@ -158,7 +158,6 @@ app.get("/messages", async (req, res) => {
 
 app.post("/status", async (req, res) => {
     const { user } = req.headers
-    console.log(user)
 
     try {
         await client.connect();
