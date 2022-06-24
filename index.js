@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import dayjs from 'dayjs'
 import joi from 'joi';
 import Joi from 'joi';
+import { stripHtml } from 'string-strip-html'
+import {strict as assert} from 'assert'
 
 dotenv.config();
 const app = express();
@@ -16,7 +18,8 @@ const client = new MongoClient(process.env.MONGO_URI);
 
 
 app.post("/participants", async (req, res) => {
-    const { name } = req.body
+    let { name } = req.body
+    name = stripHtml(name).result.trim();
     try {
         await client.connect();
         const db = client.db("batePapoUol");
@@ -41,6 +44,7 @@ app.post("/participants", async (req, res) => {
             client.close();
             return;
         }
+        
 
         // send user to server
         await db.collection("users").insertOne({
