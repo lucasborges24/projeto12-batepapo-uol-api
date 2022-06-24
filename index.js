@@ -6,7 +6,7 @@ import dayjs from 'dayjs'
 import joi from 'joi';
 import Joi from 'joi';
 import { stripHtml } from 'string-strip-html'
-import {strict as assert} from 'assert'
+import { sanitaze } from './sanitaze.js'
 
 dotenv.config();
 const app = express();
@@ -19,7 +19,7 @@ const client = new MongoClient(process.env.MONGO_URI);
 
 app.post("/participants", async (req, res) => {
     let { name } = req.body
-    name = stripHtml(name).result.trim();
+    name = sanitaze(name)
     try {
         await client.connect();
         const db = client.db("batePapoUol");
@@ -83,9 +83,12 @@ app.get("/participants", async (req, res) => {
 })
 
 app.post("/messages", async (req, res) => {
-    const { to, text, type } = req.body;
-    const { user } = req.headers;
-
+    let { to, text, type } = req.body;
+    let { user } = req.headers;
+    to = sanitaze(to);
+    text = sanitaze(text)
+    type = sanitaze(type)
+    user = sanitaze(user)
     const messageSchema = Joi.object({
         to: joi.string()
             .required(),
@@ -107,8 +110,6 @@ app.post("/messages", async (req, res) => {
         await client.connect();
         const db = client.db("batePapoUol");
 
-
-        // tem que fazer a validação do "from" com o JOI
         const participant = await db.collection("users").findOne({ name: user })
         if (!participant) {
             console.log(`${user} is not a valid user`)
@@ -134,7 +135,8 @@ app.post("/messages", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
     const limit = parseInt(req.query.limit);
-    const { user } = req.headers;
+    let { user } = req.headers;
+    user = sanitaze(user);
     let messagesFiltered;
 
     try {
@@ -162,7 +164,8 @@ app.get("/messages", async (req, res) => {
 })
 
 app.post("/status", async (req, res) => {
-    const { user } = req.headers
+    let { user } = req.headers
+    user = sanitaze(user);
 
     try {
         await client.connect();
