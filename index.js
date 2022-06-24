@@ -21,8 +21,8 @@ app.post("/participants", async (req, res) => {
         await client.connect();
         const db = client.db("batePapoUol");
 
-        const NameAlreadyExist = await db.collection("users").find({ name }).toArray();
-
+        const NameAlreadyExist = await db.collection("users").findOne({ name });
+        
         const nameSchema = Joi.object({
             name: Joi.string().required()
         })
@@ -36,7 +36,7 @@ app.post("/participants", async (req, res) => {
         }
 
         // user conflit
-        if (NameAlreadyExist.length > 0) {
+        if (NameAlreadyExist) {
             res.sendStatus(409);
             client.close();
             return;
@@ -184,7 +184,6 @@ app.post("/status", async (req, res) => {
 })
 
 setInterval(async () => {
-    console.log("set interval passando mais uma vez")
     try {
         await client.connect();
         const db = client.db("batePapoUol");
@@ -208,13 +207,14 @@ setInterval(async () => {
                 type: "status",
                 time: dayjs().format('HH:mm:ss')
             })
+            console.log(`O usuário ${itWillDeleted[i].name} saiu da sala.`)
         }
         client.close()
     } catch (error) {
-
+        console.log("algum erro aconteceu")
         client.close()
     }
-}, 150000)
+}, 15000)
 
 app.listen(5000, () => {
     console.log("servidor funfando")
