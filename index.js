@@ -81,7 +81,7 @@ app.get("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const { user } = req.headers;
-    
+
     const messageSchema = Joi.object({
         to: joi.string()
             .required(),
@@ -164,14 +164,14 @@ app.post("/status", async (req, res) => {
         const db = client.db("batePapoUol");
 
         const participant = await db.collection("users").findOne({ name: user })
-        if(!participant) {
+        if (!participant) {
             res.sendStatus(404);
             return;
         }
         await db.collection("users").updateOne({
             name: user,
         }, {
-            $set: {lastStatus: Date.now()}
+            $set: { lastStatus: Date.now() }
         })
         client.close();
         res.sendStatus(200)
@@ -181,6 +181,39 @@ app.post("/status", async (req, res) => {
         return;
     }
 })
+
+setInterval(async () => {
+    console.log("set interval passando mais uma vez")
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+        const itWillDeleted = await db.collection("users").find({
+            lastStatus: { $lt: (Date.now() - 10000) }
+        }).toArray()
+        if (itWillDeleted.length === 0) {
+            client.close();
+            console.log("n tem nenhum usuário pra ser deletado")
+            return;
+        }
+
+        for (let i = 0; i < itWillDeleted.length; i++) {
+            const id = itWillDeleted[i]._id
+            await db.collection("users").deleteOne({ _id: id })
+            await db.collection("messages").insertOne({
+                from: itWillDeleted[i].name,
+                to: "Todos",
+                text: "sai da sala...",
+                type: "status",
+                time: dayjs().format('HH:mm:ss')
+            })
+        }
+        client.close()
+    } catch (error) {
+
+        client.close()
+    }
+}, 15000)
 
 app.listen(5000, () => {
     console.log("servidor funfando")
