@@ -140,7 +140,8 @@ app.get("/messages", async (req, res) => {
         messagesFiltered = await db.collection("messages").find({
             $or:
                 [
-                    { to: { $in: ["Todos", user] } },
+                    {type: { $in: ["message", "status"]}},
+                    { to: user  },
                     { from: user }
                 ]
         }).toArray();
@@ -213,7 +214,7 @@ setInterval(async () => {
 
         client.close()
     }
-}, 15000)
+}, 150000)
 
 app.listen(5000, () => {
     console.log("servidor funfando")
