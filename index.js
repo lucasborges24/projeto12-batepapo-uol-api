@@ -136,6 +136,14 @@ app.post("/messages", async (req, res) => {
 app.get("/messages", async (req, res) => {
     const limit = parseInt(req.query.limit);
     let { user } = req.headers;
+    const userSchema = Joi.object({
+        user: Joi.string().required()
+    })
+    const {error} = userSchema.validate({ user })
+    if (error) {
+        res.status(422).send("Something with users is wrong");
+        return;
+    }
     user = sanitaze(user);
     let messagesFiltered;
 
@@ -151,7 +159,7 @@ app.get("/messages", async (req, res) => {
                     { from: user }
                 ]
         }).toArray();
-        if (limit !== undefined) {
+        if (limit) {
             messagesFiltered = messagesFiltered.slice(-limit)
         }
         client.close()
