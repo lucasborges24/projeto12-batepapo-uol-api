@@ -85,10 +85,6 @@ app.get("/participants", async (req, res) => {
 app.post("/messages", async (req, res) => {
     let { to, text, type } = req.body;
     let { user } = req.headers;
-    to = sanitaze(to);
-    text = sanitaze(text)
-    type = sanitaze(type)
-    user = sanitaze(user)
     const messageSchema = Joi.object({
         to: joi.string()
             .required(),
@@ -100,11 +96,14 @@ app.post("/messages", async (req, res) => {
             .required(),
     })
     const validation = messageSchema.validate({ to, text, type }, { abortEarly: true })
-
     if (validation.error) {
         res.sendStatus(422);
         return;
     }
+    to = sanitaze(to);
+    text = sanitaze(text)
+    type = sanitaze(type)
+    user = sanitaze(user)
 
     try {
         await client.connect();
