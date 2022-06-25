@@ -159,7 +159,8 @@ app.get("/messages", async (req, res) => {
                     { from: user }
                 ]
         }).toArray();
-        if (limit) {
+
+        if (limit && messagesFiltered) {
             messagesFiltered = messagesFiltered.slice(-limit)
         }
         client.close()
