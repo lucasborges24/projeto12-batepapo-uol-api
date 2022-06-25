@@ -174,6 +174,14 @@ app.get("/messages", async (req, res) => {
 
 app.post("/status", async (req, res) => {
     let { user } = req.headers
+    const userSchema = Joi.object({
+        user: Joi.string().required()
+    })
+    const {error} = userSchema.validate({ user })
+    if (error) {
+        res.status(422).send("Something with users is wrong");
+        return;
+    }
     user = sanitaze(user);
 
     try {
@@ -190,8 +198,9 @@ app.post("/status", async (req, res) => {
         }, {
             $set: { lastStatus: Date.now() }
         })
-        client.close();
+        
         res.sendStatus(200)
+        client.close();
     } catch (error) {
         res.status(500).send("Internal Error")
         client.close()
