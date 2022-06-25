@@ -1,6 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs'
 import joi from 'joi';
@@ -187,6 +187,47 @@ app.post("/status", async (req, res) => {
         res.status(500).send("Internal Error")
         client.close()
         return;
+    }
+})
+
+app.delete("/messages/:idMessage", async (req, res) => {
+    let { user } = req.headers
+    let { idMessage } = req.params
+    console.log(idMessage)
+    const userSchema = Joi.object({
+        user: Joi.string()
+            .required()
+            
+    })
+    const { error } = userSchema.validate({ user })
+    if (error) {
+        res.sendStatus(500);
+        return;
+    }
+    user = sanitaze(user);
+
+    try {
+        await client.connect();
+        const db = client.db("batePapoUol");
+
+        const message = await db.collection("messages").findOne({_id: ObjectId(idMessage)})
+        if (!message) {
+            res.sendStatus(404);
+            return;
+        }
+        if (message.from !== user) {
+            res.sendStatus(401);
+            return;
+        }
+        
+        await db.collection("messages").deleteOne({_id: ObjectId(idMessage)})
+
+        res.sendStatus(200)
+        client.close()
+    } catch (error) {
+        console.log(error)
+        client.close()
+        res.sendStatus(500);
     }
 })
 
