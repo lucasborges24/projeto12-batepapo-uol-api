@@ -183,7 +183,7 @@ app.post("/status", async (req, res) => {
         return;
     }
     user = sanitaze(user);
-
+    
     try {
         await client.connect();
         const db = client.db("batePapoUol");
@@ -193,12 +193,13 @@ app.post("/status", async (req, res) => {
             res.sendStatus(404);
             return;
         }
+        console.log(user)
         await db.collection("users").updateOne({
             name: user,
         }, {
             $set: { lastStatus: Date.now() }
         })
-        
+
         res.sendStatus(200)
         client.close();
     } catch (error) {
