@@ -4,54 +4,44 @@ import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs'
 import joi from 'joi';
-import Joi from 'joi';
+import chalk from 'chalk';
 import { stripHtml } from 'string-strip-html'
 import { sanitaze } from './sanitaze.js'
+import { nameSchema, messageSchema, userSchema } from './joi.js'
 
 dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-
 const client = new MongoClient(process.env.MONGO_URI);
-
 
 app.post("/participants", async (req, res) => {
     let { name } = req.body
+
+    const validationBeforeSanitizing = nameSchema.validate({ name })
+    if (validationBeforeSanitizing.error) return res.sendStatus(422);
+
     name = sanitaze(name)
+    const validationAfterSanitizing = nameSchema.validate({ name })
+    if (validationAfterSanitizing.error) return res.sendStatus(422);
+
     try {
         await client.connect();
         const db = client.db("batePapoUol");
 
         const NameAlreadyExist = await db.collection("users").findOne({ name });
 
-        const nameSchema = Joi.object({
-            name: Joi.string().required()
-        })
-        const validation = nameSchema.validate({ name: name })
-
-        // invalid user
-        if (validation.error) {
-            res.sendStatus(422);
-            client.close();
-            return;
-        }
-
-        // user conflit
         if (NameAlreadyExist) {
-            res.sendStatus(409);
             client.close();
-            return;
+            return res.sendStatus(409);
         }
 
-
-        // send user to server
         await db.collection("users").insertOne({
             name,
             lastStatus: Date.now()
         })
-        // send message about user entered
+
         await db.collection("messages").insertOne({
             from: name,
             to: 'Todos',
@@ -59,51 +49,42 @@ app.post("/participants", async (req, res) => {
             type: 'status',
             time: dayjs().format('HH:mm:ss')
         })
+        res.status(201).send("OK")
         client.close();
     } catch (error) {
-        console.log("deu erro")
+        res.sendStatus(500)
         client.close();
     }
-    res.status(201).send("OK")
 })
 
 app.get("/participants", async (req, res) => {
-    let participants;
     try {
         await client.connect();
         const db = client.db("batePapoUol");
 
-        participants = await db.collection("users").find({}).toArray();
+        const participants = await db.collection("users").find({}).toArray();
+        res.send(participants)
         client.close();
     } catch (error) {
         res.sendStatus(500);
         client.close();
     }
-    res.send(participants)
 })
 
 app.post("/messages", async (req, res) => {
     let { to, text, type } = req.body;
     let { user } = req.headers;
-    const messageSchema = Joi.object({
-        to: joi.string()
-            .required(),
-        text: joi.string()
-            .required(),
-        type: joi.string()
-            .valid("message")
-            .valid("private_message")
-            .required(),
-    })
-    const validation = messageSchema.validate({ to, text, type }, { abortEarly: true })
-    if (validation.error) {
-        res.sendStatus(422);
-        return;
-    }
+    const validationBeforeBody = messageSchema.validate({ to, text, type })
+    const validationBeforeHeader = userSchema.validate({ user })
+    if (validationBeforeBody.error || validationBeforeHeader.error) return res.sendStatus(422);
+
     to = sanitaze(to);
-    text = sanitaze(text)
-    type = sanitaze(type)
-    user = sanitaze(user)
+    text = sanitaze(text);
+    type = sanitaze(type);
+    user = sanitaze(user);
+    const validationAfterBody = messageSchema.validate({ to, text, type })
+    const validationAfterHeader = userSchema.validate({ user })
+    if (validationAfterHeader.error || validationAfterBody.error) return res.sendStatus(422);
 
     try {
         await client.connect();
@@ -111,10 +92,9 @@ app.post("/messages", async (req, res) => {
 
         const participant = await db.collection("users").findOne({ name: user })
         if (!participant) {
-            console.log(`${user} is not a valid user`)
-            res.sendStatus(422);
+            console.log(chalk.redBright(`${user} is not a valid user`))
             client.close();
-            return;
+            return res.sendStatus(422);
         }
 
         await db.collection("messages").insertOne({
@@ -124,33 +104,39 @@ app.post("/messages", async (req, res) => {
             type,
             time: dayjs().format('HH:mm:ss')
         })
+        res.status(201).send("OK")
         client.close();
     } catch (error) {
         res.sendStatus(500);
         client.close();
     }
-    res.status(201).send("OK")
 })
 
 app.get("/messages", async (req, res) => {
-    const limit = parseInt(req.query.limit);
+    let limit;
+    if (!req.query.limit || !parseInt(req.query.limit)) {
+        limit = null;
+    } else {
+        limit = parseInt(req.query.limit);
+    }
     let { user } = req.headers;
-    const userSchema = Joi.object({
-        user: Joi.string().required()
-    })
     const { error } = userSchema.validate({ user })
     if (error) {
         res.status(422).send("Something with users is wrong");
         return;
     }
-    user = sanitaze(user);
-    let messagesFiltered;
 
+    user = sanitaze(user);
+    const errorAfter = userSchema.validate({ user })
+    if (errorAfter.error) {
+        res.status(422).send("Something with users is wrong");
+        return;
+    }
     try {
         await client.connect();
         const db = client.db("batePapoUol");
 
-        messagesFiltered = await db.collection("messages").find({
+        let messagesFiltered = await db.collection("messages").find({
             $or:
                 [
                     { type: { $in: ["message", "status"] } },
@@ -162,81 +148,73 @@ app.get("/messages", async (req, res) => {
         if (limit && messagesFiltered) {
             messagesFiltered = messagesFiltered.slice(-limit)
         }
+
+        res.send(messagesFiltered)
         client.close()
     } catch (error) {
-        res.sendStatus(500);
         client.close();
-        return;
+        return res.sendStatus(500);
     }
-    res.send(messagesFiltered)
 })
 
 app.post("/status", async (req, res) => {
-    let { user } = req.headers
-    const userSchema = Joi.object({
-        user: Joi.string().required()
-    })
-    const { error } = userSchema.validate({ user })
+    const { error } = userSchema.validate(req.headers)
     if (error) {
-        res.status(422).send("Something with users is wrong");
+        res.status(422).send(error.details[0].message);
         return;
     }
-    user = sanitaze(user);
 
+    const user = sanitaze(req.headers.user);
+    const errorAfter = userSchema.validate({ user })
+    if (errorAfter.error) {
+        res.status(422).send(errorAfter.error.details[0].message);
+        return;
+    }
     try {
         await client.connect();
         const db = client.db("batePapoUol");
 
         const participant = await db.collection("users").findOne({ name: user })
-        if (!participant) {
-            res.sendStatus(404);
-            return;
-        }
-        console.log(user)
+
+        if (!participant) return res.sendStatus(404);
+
         await db.collection("users").updateOne({
             name: user,
         }, {
             $set: { lastStatus: Date.now() }
         })
-
-        res.sendStatus(200)
+        console.log(chalk.greenBright(`The ${user} acess was updated`))
+        res.sendStatus(200);
         client.close();
     } catch (error) {
-        res.status(500).send("Internal Error")
-        client.close()
-        return;
+        client.close();
+        return res.status(500).send("Internal Error");
     }
 })
 
 app.delete("/messages/:idMessage", async (req, res) => {
-    let { user } = req.headers
     let { idMessage } = req.params
-    console.log(idMessage)
-    const userSchema = Joi.object({
-        user: Joi.string()
-            .required()
 
-    })
-    const { error } = userSchema.validate({ user })
+    const { error } = userSchema.validate(req.headers)
     if (error) {
-        res.sendStatus(500);
+        res.status(422).send(error.details[0].message);
         return;
     }
-    user = sanitaze(user);
 
+    const user = sanitaze(req.headers.user);
+    const errorAfter = userSchema.validate({ user })
+    if (errorAfter.error) {
+        res.status(422).send(errorAfter.error.details[0].message);
+        return;
+    }
     try {
         await client.connect();
         const db = client.db("batePapoUol");
 
         const message = await db.collection("messages").findOne({ _id: ObjectId(idMessage) })
-        if (!message) {
-            res.sendStatus(404);
-            return;
-        }
-        if (message.from !== user) {
-            res.sendStatus(401);
-            return;
-        }
+
+        if (!message) return res.sendStatus(404);
+        if (message.from !== user) return res.sendStatus(401);
 
         await db.collection("messages").deleteOne({ _id: ObjectId(idMessage) })
 
@@ -244,37 +222,30 @@ app.delete("/messages/:idMessage", async (req, res) => {
         client.close()
     } catch (error) {
         console.log(error)
-        client.close()
         res.sendStatus(500);
+        client.close()
     }
 })
 
 app.put("/messages/:idMessage", async (req, res) => {
-    let { to, text, type } = req.body;
-    let { user } = req.headers;
     let { idMessage } = req.params
-    const messageSchema = Joi.object({
-        to: joi.string()
-            .required(),
-        text: joi.string()
-            .required(),
-        user: joi.string()
-            .required(),
-        type: joi.string()
-            .valid("message")
-            .valid("private_message")
-            .required(),
-    })
-    const validation = messageSchema.validate({ to, text, type, user }, { abortEarly: true })
-    if (validation.error) {
-        res.sendStatus(422);
-        return;
-    }
-    to = sanitaze(to);
-    text = sanitaze(text)
-    type = sanitaze(type)
-    user = sanitaze(user)
+    
 
+    const validationBeforeBody = messageSchema.validate(req.body)
+    const validationBeforeHeader = userSchema.validate(req.headers)
+    if (validationBeforeBody.error || validationBeforeHeader.error) {
+        return res.sendStatus(422);
+    }
+    
+    const to = sanitaze(req.body.to);
+    const text = sanitaze(req.body.text)
+    const type = sanitaze(req.body.type)
+    const user = sanitaze(req.headers.user)
+    const validationAfterBody = messageSchema.validate({to, text, type})
+    const validationAfterHeader = userSchema.validate({ user })
+    if (validationAfterBody.error || validationAfterHeader.error) {
+        return res.status(422).send(validationAfterBody.error.details);
+    }
     try {
         await client.connect();
         const db = client.db("batePapoUol");
@@ -282,20 +253,14 @@ app.put("/messages/:idMessage", async (req, res) => {
         const participant = await db.collection("users").findOne({ name: user })
         if (!participant) {
             console.log(`${user} is not a valid user`)
-            res.sendStatus(422);
             client.close();
-            return;
+            return res.sendStatus(422);
         }
 
         const message = await db.collection("messages").findOne({ _id: ObjectId(idMessage) })
-        if (!message) {
-            res.sendStatus(404);
-            return;
-        }
-        if (message.from !== user) {
-            res.sendStatus(401);
-            return;
-        }
+        
+        if (!message) return res.sendStatus(404);
+        if (message.from !== user) return res.sendStatus(401);
 
         await db.collection("messages").updateOne({
             _id: ObjectId(idMessage),
@@ -322,10 +287,10 @@ setInterval(async () => {
         const itWillDeleted = await db.collection("users").find({
             lastStatus: { $lt: (Date.now() - 10000) }
         }).toArray()
+
         if (itWillDeleted.length === 0) {
             client.close();
-            console.log("n tem nenhum usuário pra ser deletado")
-            return;
+            return console.log("there is no user to be deleted")
         }
 
         for (let i = 0; i < itWillDeleted.length; i++) {
@@ -338,15 +303,15 @@ setInterval(async () => {
                 type: "status",
                 time: dayjs().format('HH:mm:ss')
             })
-            console.log(`O usuário ${itWillDeleted[i].name} saiu da sala.`)
+            console.log(`${itWillDeleted[i].name} left the room`)
         }
         client.close()
     } catch (error) {
-        console.log("algum erro aconteceu")
+        res.sendStatus(500)
         client.close()
     }
 }, 15000)
 
 app.listen(5000, () => {
-    console.log("servidor funfando")
+    console.log("server running")
 })
